@@ -1,12 +1,12 @@
 # Análise das bases do DenguePrev
 
-Análise realizada em 24/10/2026 sobre `arquivos-proj-int-iv.zip`. A proposta é tecnicamente executável, mas a cobertura epidemiológica do Espírito Santo precisa ser validada antes do treinamento. Este documento registra observações e propostas; não define a fonte final nem publica bases no GitHub.
+Análise realizada em 24/10/2026 sobre `arquivos-proj-int-iv.zip`. A proposta é tecnicamente executável, mas a cobertura epidemiológica do Espírito Santo precisa ser validada antes do treinamento. Este documento registra observações e propostas; não define a fonte final nem publica bases no GitHub, servindo de base de alinhamento da equipe.
 
 O pacote tem 956.346.013 bytes (912,04 MiB), contém 13 ZIPs e um CSV avulso e reúne 3.478 CSVs. O conteúdo final ocuparia 6.300.884.379 bytes (5,87 GiB) descompactado. SHA-256 do pacote: `fdfeabaa760343234ee0ebcfe1bdaebe6c69766a851858907967c0e900b5d26c`.
 
 A análise leu integralmente os sete CSVs do SINAN, todas as 121 colunas, contabilizando os registros nacionais e examinando todas as colunas do recorte de residentes no ES. No INMET, verificou o CRC de todos os 3.470 arquivos nacionais e examinou integralmente os 74 CSVs do ES, com foco em precipitação, temperatura do ar e umidade relativa. O CSV populacional foi lido integralmente, incluindo notas e fontes. Os ZIPs internos foram abertos em memória; os CSVs originais não foram descompactados em massa nem alterados. Cópias temporárias do recorte estadual em Parquet ficaram em `.tools/data-audit/`, ignorada pelo Git.
 
-**Inventário dos arquivos recebidos**
+## Inventário dos arquivos recebidos
 
 | Arquivo | Fonte | Tamanho do arquivo (MiB) | CSV descompactado(s) (MiB) | CSVs |
 | --- | --- | --- | --- | --- |
@@ -27,7 +27,7 @@ A análise leu integralmente os sete CSVs do SINAN, todas as 121 colunas, contab
 
 As somas dos tamanhos internos diferem do tamanho externo porque o pacote recomprime os ZIPs. O manifesto dos arquivos originais e seus checksums estão em [inventario-bases.json](inventario-bases.json). Os resultados relevantes dos perfis estão registrados neste relatório; os arquivos intermediários usados na análise foram removidos na limpeza do projeto. Não há erro de CRC nos membros lidos na análise. Isso verifica integridade de leitura, sem certificar a correção dos valores de origem.
 
-**SINAN: estrutura e cobertura observada**
+## SINAN: estrutura e cobertura observada
 
 Os sete arquivos têm o mesmo esquema de 121 colunas, separador vírgula e conteúdo compatível com UTF-8. Foram lidos 14.232.340 registros nacionais. O filtro `SG_UF = 32` encontrou 363.020 registros de residentes do ES, com códigos municipais compatíveis com os 78 municípios do CSV do IBGE.
 
@@ -47,29 +47,22 @@ Há uma limitação de fonte que afeta diretamente o projeto: o Ministério da S
 
 Como verificação externa de ordem de grandeza, um relatório da SESA registra 44.306 notificações no ES em 2020 e 255.957 em 2024, usando e-SUS VS. Os pacotes recebidos têm, respectivamente, 7.852 e 138.123 registros de residentes. Não são universos automaticamente equivalentes: definição, tempo de referência, revisão e filtros podem diferir. A divergência justifica conciliação, sem calcular uma taxa de cobertura a partir desses totais. [Relatório oficial da SESA](https://saude.es.gov.br/Media/sesa/Presta%C3%A7%C3%A3o%20de%20Contas/PRESTA%C3%87%C3%83O%20DE%20CONTAS%20-%201%C2%BA%20QUADRIMESTRE%202025.pdf).
 
-Pontos concretos para o tratamento:
+### Pontos concretos para o tratamento
 
 - Em 2020, 43 municípios não aparecem no recorte e só 26 semanas de notificação estão representadas. Isso exige tratar a cobertura como desconhecida, em vez de preencher automaticamente com zero.
-
 - Há 1.206 registros de residentes do ES notificados em outras UFs. Filtrar apenas `SG_UF_NOT = 32` ou usar `ID_MUNICIP` como residência mudaria o universo. Para o indicador por residência, o campo municipal pertinente é `ID_MN_RESI`.
-
 - O município de residência, a data dos primeiros sintomas e a semana dos primeiros sintomas estão preenchidos em todos os registros do recorte. Isso permite a agregação técnica, mas não resolve o problema de cobertura.
-
 - Há 208 linhas adicionais exatamente iguais dentro dos arquivos. A exportação não traz `NU_NOTIFIC`; não é possível concluir que sejam pacientes duplicados. Não remover essas linhas sem uma regra justificável e sem avaliar o campo `NDUPLIC_N`.
-
 - No arquivo de 2020, sete datas de início de sintomas são anteriores a 2019, incluindo uma de 1987. São inconsistências ou registros atípicos a revisar e documentar, sem corrigi-los silenciosamente.
-
 - A conferência entre data e calendário epidemiológico encontrou 56 divergências em `SEM_PRI` no pacote de 2022 e 688 em `SEM_NOT` no total: uma em 2022 e 687 em 2023. Exemplo agregado: `DT_SIN_PRI = 2021-12-31` aparece com `SEM_PRI = 202252`. Recalcular em campo separado e guardar a versão original.
-
 - Há 213 registros com data de digitação anterior à notificação e atrasos de notificação que podem atravessar anos. O backtest precisa explicitar que usa uma extração histórica revisada, sem reconstrução garantida do que era conhecido em cada semana.
-
 - O arquivo de 2026 é parcial: no recorte, a última notificação é de 07/09/2026 e o último início de sintomas é de 05/09/2026. Não comparar seu total com anos completos.
 
 As classificações observadas são `10` (333.170), `11` (7.812), `12` (330), `5` (7.013), `8` (888), `0` (13.740) e vazia (67). O dicionário oficial associa 10, 11 e 12 a dengue, dengue com sinais de alarme e dengue grave. Para a implementação, definir se o alvo será notificação, caso provável ou confirmado e validar também o critério de confirmação. Os códigos 0 e 8 precisam de interpretação compatível com a versão exportada. [Dicionário SINAN](https://portalsinan.saude.gov.br/images/documentos/Agravos/Dengue/DIC_DADOS_ONLINE.pdf).
 
 Consulte o [calendário epidemiológico oficial](https://www.portalsinan.saude.gov.br/calendario-epidemiologico/) para fixar semanas de domingo a sábado e o ano epidemiológico nas transições de dezembro/janeiro. Não usar automaticamente a semana ISO.
 
-**INMET: cobertura, qualidade e integração**
+## INMET: cobertura, qualidade e integração
 
 Os seis ZIPs nacionais cobrem 2020 a 2025. O recorte do ES reúne 74 arquivos anuais de estação, 13 códigos de estação e 648.840 linhas horárias. Os horários vão de 01/01/2020 00:00 UTC a 31/12/2025 23:00 UTC. Todos os arquivos do ES têm o número esperado de linhas do respectivo ano; não foram encontrados timestamps inválidos ou pares estação/horário duplicados. A existência da linha horária não significa que seus sensores estejam preenchidos.
 
@@ -110,7 +103,7 @@ Para agregar, somar a precipitação disponível e calcular médias das temperat
 
 O INMET esclarece que os horários são UTC e que os dados automáticos são brutos. A definição da semana deve considerar o fuso de referência, preservando o timestamp original; uma hora UTC próxima à meia-noite pode pertencer ao dia anterior no ES. [Orientações do INMET](https://portal.inmet.gov.br/noticias/saiba-como-acessar-os-dados-meteorol%C3%B3gicos-dispon%C3%ADveis-no-site-do-inmet). Não há meteorologia de 2026 no material enviado.
 
-**IBGE: cadastro municipal e denominadores populacionais**
+## IBGE: cadastro municipal e denominadores populacionais
 
 O CSV avulso reúne os 78 municípios, com 78 códigos de sete dígitos únicos. Os primeiros seis dígitos também são únicos e correspondem a todos os códigos de residência do recorte SINAN. Usar essa tabela explícita de correspondência entre código de seis e sete dígitos; preservar os identificadores como texto.
 
@@ -120,11 +113,11 @@ O arquivo tem uma linha de título antes do cabeçalho, coluna final vazia, nota
 
 O cadastro é útil, mas não é uma série de população municipal por ano para 2020-2026. Para incidência histórica, obter os denominadores anuais compatíveis e documentar o tratamento do ano censitário e das revisões. Aplicar a mesma população recente a todos os anos só deve ocorrer como aproximação explicitamente assumida. [Publicação de estimativas municipais do IBGE](https://www.ibge.gov.br/estatisticas/sociais/populacao/9103-estimativas-de-populacao.html).
 
-**Fonte estadual encontrada para a próxima verificação**
+## Fonte estadual encontrada para a próxima verificação
 
 A SESA mantém um conjunto oficial extraído do e-SUS VS a partir de 2020 e de registros legados do SINAN antes disso. O recurso público de dengue inspecionado, porém, expõe somente `ano`, `mes`, `agravo` e `notificacao`. Ele serve para conciliação estadual mensal; seu esquema não atende à análise por município e semana. É necessário localizar uma exportação estadual com a granularidade pretendida antes de decidir pela substituição ou complementação do SINAN. Não somar as duas fontes sem examinar sobreposição. [Conjunto estadual](https://dados.es.gov.br/dataset/doencas-e-agravos-de-notificacao), [esquema do recurso de dengue](https://dados.es.gov.br/dataset/doencas-e-agravos-de-notificacao/resource/2aa339ae-b1b3-437f-b1d4-cc00239fbbbe).
 
-**Proposta de armazenamento no GitHub, pendente de decisão**
+## Proposta de armazenamento no GitHub, pendente de decisão
 
 O ZIP externo tem 912,04 MiB. Individualmente, `2023.zip` tem 102,11 MiB e `DENGBR24.csv.zip` tem 178,59 MiB. Os três ultrapassam o limite de 100 MiB do Git convencional no GitHub. [Limites de arquivos](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github).
 
@@ -136,18 +129,18 @@ O volume de trabalho estadual é muito menor: os 74 CSVs originais do INMET ES s
 
 O `.gitignore` já protege `data/` e `.tools/`. Nesta análise foi acrescentada a regra específica `/arquivos-proj-int-iv.zip`, pois o arquivo foi colocado na raiz. Não houve commit, push ou criação de release.
 
-**Ordem de trabalho sugerida para discussão**
+## Ordem de trabalho sugerida para discussão
 
 1. Conciliar a cobertura de dengue no ES com a SESA, definir a fonte e escolher o significado do alvo: notificação, provável ou confirmado. Esta decisão vem antes da comparação de modelos.
-
 2. Fixar período e granularidade. O intervalo comum enviado é 2020-2025, mas 2020 tem problemas fortes de cobertura. Os anos de 2023-2025 apresentam registros de todos os municípios e são candidatos à exploração inicial, ainda sujeitos à conciliação. Para usar 2026 com clima, obter o INMET desse ano.
-
 3. Documentar um esquema analítico com código IBGE, início da semana epidemiológica, ano/semana, contagens e sua definição, população/ano/fonte, incidência por 100 mil, clima e indicadores de cobertura. Manter valores ausentes e zero separados.
-
 4. Implementar a ingestão em lotes, a normalização dos códigos e datas, o relatório de inconsistências e a agregação por município/semana. Criar testes de calendários, códigos, limites de ano, cálculo de incidência e preservação de ausência meteorológica.
-
 5. Construir uma previsão de referência, como repetir o valor da semana anterior, e comparar Random Forest e Gradient Boosting somente com separações temporais. Usar um único corte de datas para todos os municípios; ajustar imputação e transformações apenas no treino. Definir o horizonte antes de preparar o alvo. Não usar o clima observado da semana futura como se estivesse disponível no momento da previsão.
-
 6. Após validar a base e a previsão de referência, desenvolver API e dashboard apoiados nos agregados. Integrar a LLM às funções da API e avaliar a fidelidade das respostas. Acrescentar RAG e refinamentos conforme a necessidade do MVP.
 
 As decisões pendentes são a fonte epidemiológica, a definição do alvo, o período utilizável, a associação município/estação, o tratamento das lacunas e o formato da release. A publicação do pacote e a implementação da aplicação ficam para a etapa seguinte à discussão desses resultados.
+
+### Notas de revisão e alinhamento da equipe
+
+- Documento revisado para consolidar os critérios de validação do ES antes de iniciar alterações nos scripts de ETL, modelagem e API.
+- Pontos de atenção prioritários para a equipe: conciliação SINAN/e-SUS VS/SESA, mapeamento dos 78 municípios às 13 estações do INMET, preservação de ausências (`NaN`) sem virar zero e uso de Releases para arquivos acima de 100 MiB.
